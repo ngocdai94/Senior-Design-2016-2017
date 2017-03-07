@@ -20,16 +20,19 @@ def sendClientData(client_sock,dataOut):
     #end sendClientData
 
 def server():
-
+    global connected
+    global masterPort
     server_sock=BluetoothSocket(RFCOMM)
     server_sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
-    server_sock.bind(("",masterPort))
-    server_sock.listen(masterPort)
-    
-
+    while connected == False:
+        try:
+            server_sock.bind(("",masterPort))
+            server_sock.listen(masterPort)
+            connected = True
+        except:
+            masterPort += 1
     #port = server_sock.getsockname()[1] # investigate later
     print ("PORT NAME: ", masterPort)
-    
     advertise_service( server_sock, "SampleServer",
                        service_id = uuid,
                        service_classes = [ uuid, SERIAL_PORT_CLASS ],
@@ -37,7 +40,6 @@ def server():
                        protocols = [ OBEX_UUID ],
                        # commentSchtuff
                         )
-                       
     print("Waiting for connection on RFCOMM channel %d" % masterPort)
 
     # client_sock is the object you will be sending data to
@@ -61,11 +63,15 @@ def server():
 #            clientSend.join()
             if len(data) == 0:
                 break
-            
             if not data: # if the connection is lost close the socket
                 client_sock.close()
                 server_sock.close()
             print(getClientData(client_sock))
+            # read data from text file
+            file = open("sensorData.txt","r")
+            dataOut = str(file.read())
+            file.close()
+            # End read data from text file
             sendClientData(client_sock,dataOut)
     except IOError:
         pass

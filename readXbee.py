@@ -38,7 +38,13 @@ while True:
     try:
         
         #read API packet
-        response = xbee.wait_read_frame()  
+        response = xbee.wait_read_frame()
+
+        # Send data to text file - Keoni
+        file = open("sensorData.txt","w")
+        file.write(str(response['source_addr_long']))
+        file.close()
+        # End Send Data to text file - Keoni
 
         #get MAC address from each Xbee
         addr = response['source_addr_long'].encode('hex')
@@ -47,8 +53,11 @@ while True:
         if addr == '0013a20040e5368f':
         
             doorstatus = getdoor(response['samples'])
+            file = open("sensorData.txt","w")
+            file.write(addr + ': door open: ' + str(doorstatus))
+            file.close()
 
-            print(addr + ': door open: ' + str(doorstatus))
+            #print(addr + ': door open: ' + str(doorstatus))
 
 
         #analog sensor
@@ -56,7 +65,7 @@ while True:
 
             analog = getXbee(response['samples'])
 
-            print(addr + ': analog : ' + str(analog))
+            #print(addr + ': analog : ' + str(analog))
         
     except KeyboardInterrupt:
         
