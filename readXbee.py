@@ -42,6 +42,13 @@ while True:
 
         #get MAC address from each Xbee
         addr = response['source_addr_long'].encode('hex')
+		
+		#receive message
+		if response['rf_data']:
+		
+		readings = response['rf_data'].split()
+
+        print(readings)
 
         #door sensor
         if addr == '0013a20040e5368f':
