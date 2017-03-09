@@ -1,3 +1,5 @@
 #!/bin/sh
-sudo python readXbee.py&
-sudo python runServer.py&
+sudo rm -r hubDatabase.sql
+sudo python CreateDatabase.py&
+sudo python masterServer.py&
+

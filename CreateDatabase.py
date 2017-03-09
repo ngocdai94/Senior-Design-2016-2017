@@ -14,7 +14,7 @@ def createSensorList():
         CREATE TABLE sensorList(
         date TEXT,
         time TEXT,
-        sensorID INTEGER,
+        sensorID TEXT,
         sensorType TEXT,
         data FLOAT)''')
     db.commit()
