@@ -7,10 +7,12 @@ import sqlite3
 import socket
 import serial
 import string
+import random
 
 # Globals
 uuid = "fa87c0d0-afac-11de-8a39-0800200c9a66"
-addr = "30:5A:3A:8E:99:4E"
+# addr = "30:5A:3A:8E:99:4E" #nexus tablet
+addr = "34:8A:7B:FE:7C:85" #Samsung Tablet
 connected = False
 masterPort = 1
 
@@ -25,24 +27,35 @@ TEMP = 'Temperature'
 HUMID = 'Humidity'
 DOORSTAT = 'Door Status'
 
+macTempHumid = "MAC_ADDR:TEMP:HUMID:DUMMY"
+macDoor = "MAC_ADDR:DOOR:DUMMY"
+
+# Parsing Globals
+chunks = []
+inputMessage = ''
+
 #Database globals
 conn = sqlite3.connect('/home/pi/DataHub/hubDatabase.sql')
 cursor = conn.cursor()
-#end globals
+#end globals        
+
 def insertTemp(data,date,time):
-    curs.execute('''
+    global macTempHumid
+    cursor.execute('''
     INSERT INTO sensorList(date, time, sensorID, sensorType, data)
     VALUES(?,?,?,?,?)''', (date, time, macTempHumid, TEMP, data))
     conn.commit()
 
 def insertHumid(data,date,time):
-    curs.execute('''
+    global macTempHumid
+    cursor.execute('''
     INSERT INTO sensorList(date, time, sensorID, sensorType, data)
     VALUES(?,?,?,?,?)''', (date, time, macTempHumid, HUMID, data))
     conn.commit()
 
 def insertDoor(data,date,time):
-    curs.execute('''
+    global macDoor
+    cursor.execute('''
     INSERT INTO sensorList(date, time, sensorID, sensorType, data)
     VALUES(?,?,?,?,?)''', (date, time, macDoor, DOORSTAT, data))
     conn.commit()
@@ -68,13 +81,40 @@ def getXbee(data):
 #end getXbee
 
 def getClientData(client_sock):
-    data = client_sock.recv(1024)
+    data = client_sock.recv(2048)
+    inputMessage = inputMessage + data
+    
     return data 
     #end getClientData
 
 def sendClientData(client_sock,dataOut):
     client_sock.send(dataOut)
     #end sendClientData
+    
+def parseString(inputMessage):
+    endOfMessage = False
+    while (not endOfMessage):
+        if (len(inputMessage) > 0):
+            endOfMessage = False
+        else:
+           endOfMessage = True
+        chunk = ''
+        chunk = inputMessage
+        index = chunk.find('~')
+        if index == -1: # Not found
+            chunks.append(chunk)
+            inputMessage = ""
+        else: # reached the end of a message
+            if index > 0:
+                chunks.append(chunk[0:index])
+            message = ''.join(chunks)
+            del chunks[:]
+            inputMessage = chunk[index+1:] # get string from ~ to end of string
+            print "inputMessage = " + inputMessage + '\n'
+            print "message = " + message + "\n"
+        
+    # end of parseString
+  
 
 def server():
     global connected
@@ -92,6 +132,7 @@ def server():
     
     server_sock=BluetoothSocket(RFCOMM)
     server_sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+    server_sock.setblocking(0)
     
     
     while connected == False:
@@ -117,43 +158,24 @@ def server():
     print("Accepted connection from ", client_info)
 
     count = 0
-
     data = "VOID"
     dataOut = "Garbage"
     try:
         while True:
-
-
-##            clientReceive = threading.Thread(target=getClientData, args=("client_sock",))
-##            clientReceive.start()
-##            clientSend = threading.Thread(target=sendClientData, args=("client_sock","dataOut"))
-##            clientSend.start()
-            
             if len(data) == 0:
                 break
             if not data: # if the connection is lost close the socket
                 client_sock.close()
                 server_sock.close()
             print(getClientData(client_sock))
-
-            # Get data
-            response = xbee.wait_read_frame()
-            #print(response)
-            #addr = response['source_addr_long'].endcode('hex')
-            print (response[0].endcode('hex'))
+            temporaryTemp = random.randint(0,100,)
+            insertTemp(temporaryTemp,date,getCurrentTime())
+            if (temporaryTemp % 2 == 0)
+                insertDoor('Open', date, getCurrentTime())
+            else:
+                insertDoor('Closed',date,getCurrentTime())
             
-            if response['rf_data']:
-                readings = response['rf_data'].split()
-            if addr == '0013a20040e5368f':
-                doorStatus= getdoor(response['samples'])
-                insertDoor(doorStatus,date,getCurrentTime())
-            elif addr == '0013a20040e898ae':
-                analog = getXbee(response['samples'])
-                insertTemp(analog,date,getCurrenTime())
-            #End get data
-
-            #Dai add this line of code
-            #conn = sqlite3.connect('/home/pi/DataHub/hubDatabase.sql')
+            print("see me 4")
             cursor.execute("SELECT * FROM sensorList")
             for reading in cursor.fetchall():
                 sendClientData(client_sock,str(reading[0]) + "        " +
