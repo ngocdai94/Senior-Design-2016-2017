@@ -1,5 +1,5 @@
 #!/bin/sh
-sudo rm -r hubDatabase.sql
-sudo python CreateDatabase.py&
-sudo python masterServer.py&
+sudo python MasterDataBase.py&
+sudo python XBeeSensors.py&
+sudo python ReadBlueTooth.py&
 

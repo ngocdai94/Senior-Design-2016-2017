@@ -3,13 +3,26 @@ import sqlite3
 import serial
 import string
 import random
+import datetime
 
 # Database Globals
-dataBase = sqlite.connect('PaccarConnect.db')
-cursor = conn.cursor()
+dataBase = sqlite3.connect('PaccarConnect.db')
+cursor = dataBase.cursor()
 
 # Globals Variables
 sensorCount = 0
+
+#ProfileID Globals
+perishables = 1
+nonPerishables = 2
+frozen = 3
+electronics = 4
+furniture = 5
+misc = 6
+
+#SensorID Numbers
+doorSensorID = 1
+tempSensorID = 2
 
 def createSensorList():
 
@@ -19,8 +32,6 @@ def createSensorList():
         sensorType TEXT
         )''')
     dataBase.commit()
-    cursur.close()
-    dataBase.close()
     
     #End createTable()
 
@@ -32,12 +43,9 @@ def createDataLog():
         sensorType TEXT,
         data INTEGER,
         timeOfLog TEXT,
-        date TEXT,
         severity INTEGER
         )''')
     dataBase.commit()
-    cursur.close()
-    dataBase.close()
     
     #End createDataLog()
     
@@ -51,13 +59,6 @@ def addSensorToList(sensorID, sensorType):
 
     #End addSensorToLIst()
 
-def enterDataLogEntry(sensorID, sensorType, data, timeOfLog, date, severity):
-
-    cursor.execute("INSERT INTO Data_Log (sensorID, sensorType, data, timeOfLog, date, severity) VALUES (?,?,?,?,?,?)",
-                   (sensorID, sensorType, data, timeOfLog, date, severity))
-    dataBase.commit()
-
-    #End enterDataLogEntry()
 
 def createInOutQueue():
 
@@ -65,32 +66,32 @@ def createInOutQueue():
         CREATE TABLE IF NOT EXISTS inQueue(
         messageID INTEGER,
         functionName TEXT,
-        messageArrivalTime TEXT,
+        messageArrivalTime TEXT
         )''')
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS outQueue(
-        messageID INTEGER,
-        functionName TEXT,
-        messageArrivalTime TEXT
+        profileName TEXT,
+        sensorName TEXT,
+        data INTEGER
         )''') 
 
     dataBase.commit()
-    cursur.close()
-    dataBase.close()
 
     #End createInOutQueue()
 
-# Helper Functions
 
-def writeToQueueOut(messageID):
 
-    timeOfLog = datetime.datetime.now().time()
-    cursor.execute("INSERT INTO outQueue (messageID, fuctionName, messageArrivalTime) VALUES (?,?,?)",
-                   (messageID, getFunctionName(messageID), timeOfLog))
-    cursor.commit()
+def writeToQueueOut(profileID,sensorNum,data):
 
-def getFunctionName(messageID):
+    cursor.execute('''INSERT INTO outQueue
+        (profileName, sensorName, data) VALUES (?,?,?)''',
+        (getProfileName(profileID), getSensorName(sensorNum), data))
+    dataBase.commit()
+
+    #End writeToQueueOut
+
+def getFunctionName(messageID): # Helper Functions
 
     if ((messageID < 0) or (messageID > 10)):
         return 'Invalid_Message_Id'
@@ -118,11 +119,110 @@ def getFunctionName(messageID):
 
     #End getFunctionName()
 
-def process(messageID):
+def readInQueue():
 
-    cursor.execute('SELECT * FROM inQueue where messageID = ?', (messageID,))
+    # Set this up for other commands rowid = other shit
+    cursor.execute('SELECT * FROM inQueue where rowid = 1')
+    for doc in cursor:
+        data = doc
+        if (True):
+            break
+    return data
+
+    #End readInQueue()
+
+def getProfileName(profileID):
+
+    if ((profileID < 1) or (profileID > 6)):
+        return 'INVALID PROFILE ENTRY'
+    
+    if (profileID == 1):
+        return 'Perishables'
+    elif (profileID == 2):
+        return 'Non-Perishables'
+    elif (profileID == 3):
+        return 'Frozen'
+    elif (profileID == 4):
+        return 'Electronics'
+    elif (profileID == 5):
+        return 'Furniture'
+    elif (profileID == 6):
+        return 'Miscellaneous'
+    else:
+        return 'INVALID PROFILE ENTRY'
+
+    #End getProfileID
+
+def getSensorName(sensorID):
+
+    if ((sensorID < 1) or (sensorID > 2)):
+        return 'INVALID DOOR SENSOR'
+    if (sensorID == 1):
+        return 'DoorSensor_1'
+
     
 
+### These are testing functions not to be used in the full script  ###
+
+def writeToQueueIn(messageID):
+
+    timeOfLog = str(datetime.datetime.now().time())[0:8]
+    cursor.execute('''INSERT INTO inQueue
+        (messageID, functionName, messageArrivalTime) VALUES (?,?,?)''',
+        (messageID, getFunctionName(messageID), str(timeOfLog)))
+    dataBase.commit()
+
+    #End writeToQueueOut
+    
+def readOutQueue():
+
+    cursor.execute('SELECT * FROM outQueue where rowid = 1')
+    for doc in cursor:
+        print(doc)
+
+    #End readInQueue()
+
+def enterDataLogEntry(sensorID, sensorType, data, timeOfLog, date, severity):
+
+    cursor.execute('''INSERT INTO Data_Log
+        (sensorID, sensorType, data, timeOfLog, severity)
+        VALUES (?,?,?,?,?,?)''',
+        (sensorID, sensorType, data, timeOfLog, severity))
+    dataBase.commit()
+
+    #End enterDataLogEntry()
+
+### TESTING FUNCTIONS::TESTING FUNCTIONS:: TESTING FUNCTIONS  ###
+
+    
+
+def main():
+
+    print('Setting up Database...')
+##    time = str(datetime.datetime.now().time())
+##    print(time[0:8])
+
+    createDataLog()
+    createInOutQueue()
+
+    
+    while True:
+        try:
+            profileName = readInQueue()
+            print(profileName)
+            writeToQueueOut(profileName,profileName,random.randint(25,300))
+        except:
+            IOError
+    #readOutQueue()
+    
+    cursor.close()
+    dataBase.close()
+
+main()
+
+    
+
+    
     
 
     

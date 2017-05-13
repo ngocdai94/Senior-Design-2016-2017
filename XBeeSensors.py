@@ -14,8 +14,8 @@ import string
 import random
 
 # Database Globals
-dataBase = sqlite.connect('PaccarConnect.db')
-cursor = conn.cursor()
+dataBase = sqlite3.connect('PaccarConnect.db')
+cursor = dataBase.cursor()
 
 SERIALPORT = "/dev/ttyUSB0"    # the com/serial port the XBee is connected to, the pi GPIO should always be ttyAMA0
 BAUDRATE = 9600            # Baudrate used to communicate over serial
@@ -29,7 +29,6 @@ DOORSTAT = 'Door Status'
 ser = serial.Serial(SERIALPORT, BAUDRATE, timeout = 1)
 xBee = ZigBee(ser)
 
-
 macTempHumid = "MAC_ADDR:TEMP:HUMID:DUMMY"
 doorMacAddr = '0013a20040e5368f' 
 
@@ -42,10 +41,12 @@ doorMacAddr = '0013a20040e5368f'
 # Sensor Type Globals
 doorSensorType = "Door_Sensor"
 
-def enterDataLogEntry(sensorID, sensorType, data, timeOfLog, date, severity):
+def enterDataLogEntry(sensorID, sensorType, data, timeOfLog, severity):
 
-    cursor.execute("INSERT INTO Data_Log (sensorID, sensorType, data, timeOfLog, date, severity) VALUES (?,?,?,?,?,?)",
-                   (sensorID, sensorType, data, timeOfLog, date, severity))
+    cursor.execute('''INSERT INTO Data_Log
+        (sensorID, sensorType, data, timeOfLog, severity)
+        VALUES (?,?,?,?,?)''',
+        (sensorID, sensorType, data, timeOfLog, severity))
     dataBase.commit()
 
     #end enterDataLogEntry()
@@ -54,17 +55,13 @@ def insertDoorData(data):
     
     global doorSensorID
     global doorSensorType
-    date = time.strftime("%y/%m/%d")
+    timeOfLog = str(datetime.datetime.now().time())[0:8]
     severity = 0
-    timeOfLog = datetime.datetime.now().time()
-    if (data == 0):
+    if (data == True):
         severity = 1
-    
-    enterDataLogEntry(macDoor, doorSensorType, data, timeOfLog, date, severity)
-    cursor.execute('''
-    INSERT INTO sensorList(date, time, sensorID, sensorType, data)
-    VALUES(?,?,?,?,?)''', (date, time, doorSensorID, doorSensorType, data, severity))
-    conn.commit()
+
+    enterDataLogEntry(doorSensorID, doorSensorType, data, timeOfLog, severity)
+    dataBase.commit()
 
     #end insertDoor()
 
@@ -85,21 +82,20 @@ def getDoorSensorData():
 
 def getXbeeResponse():
 
-    global xbee
-    
-    return xbee.wait_read_frame()
+    global xBee
+    return xBee.wait_read_frame()
 
     #end getXbeeResponse()
 
 def main():
 
+    print("Gathering Data")
     while True:
-
-        try:
-            insertDoorData(getDoorSensorData())
-        except:
-            break
-
+        #insertDoorData(getDoorSensorData())
+        time.sleep(.5)
+        data = str(getXbeeResponse()['samples'])
+        insertDoorData(data)
+        
     cursor.close()
     dataBase.close()
 
