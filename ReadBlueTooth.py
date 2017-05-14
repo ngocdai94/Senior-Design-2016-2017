@@ -12,6 +12,10 @@ addr = "34:8A:7B:FE:7C:85" #Samsung Tablet
 connected = False
 masterPort = 1
 
+#Global socket connections
+GLOBAL_CLIENT_SOCK = None
+GLOBAL_SERVER_SOCK = None
+
 # Parsing Globals
 chunks = []
 inputMessage = ''
@@ -30,7 +34,9 @@ furniture = 5
 misc = 6
 
 def parseString(inputMessage):
-    
+
+    # To do handle instance with mulitiple ~ in chunk buffer
+    # Investigate JSON library
     print "parseString called"
     global chunks
     endOfMessage = False
@@ -47,6 +53,7 @@ def parseString(inputMessage):
         if index == -1: # Not found
             chunks.append(chunk)
             inputMessage = ""
+            #print(chunks)
         else: # reached the end of a message
             if index > 0:
                 chunks.append(chunk[0:index])
@@ -69,6 +76,12 @@ def getClientData(client_sock):
 
     #end getClientData
 
+def sendClientData(client_sock,dataOut):
+
+    client_sock.send(dataOut)
+
+    #End sendClientData
+
 def closeSocketConnections(client_sock,server_sock):
 
     print("disconnected")
@@ -90,6 +103,7 @@ def server():
     
     server_sock=BluetoothSocket(RFCOMM) #Initialize Server Object
     server_sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+    GLOBAL_SERVER_SOCK = server_sock #update the global for error handling
     
     while connected == False: 
         try:
@@ -110,6 +124,7 @@ def server():
 
     # client_sock is where the Data will be sent via Bluetooth
     client_sock, client_info = server_sock.accept() # join the sockets
+    GLOBAL_CLIENT_SOCK = client_sock
     print("Accepted connection from ", client_info)
     server_sock.setblocking(0) #non-blocking server call
 
@@ -120,15 +135,25 @@ def server():
     
     while isConnected:
         if len(data) == 0:
+            print ("data == 0")
             break
         if not data: # if the connection is lost close the socket
             isConnected = False
         try:
             data = parseString(getClientData(client_sock))
+            print ("ReadBluetooth.Server:Line138 data = : "+ data)
             writeToQueueIn(int(data))
             count = 1
         except IOError:
             isConnected = False
+
+        try:
+            dataOut = getOutQueueData()
+            if (dataOut):
+                print("ReadBlueTooth says: " + dataOut)
+                sendClientData(client_sock,dataOut)
+        except IOError:
+            print("getOutQueueData Failed or sendClietDataFailed")
 
     closeSocketConnections(client_sock,server_sock)
 
@@ -162,6 +187,7 @@ def getFunctionName(messageID): # Helper Functions
 
     #End getFunctionName()
 
+
 def writeToQueueIn(messageID):
 
     timeOfLog = str(datetime.datetime.now().time())[0:8]
@@ -174,11 +200,18 @@ def writeToQueueIn(messageID):
 
 def readOutQueue():
 
-    cursor.execute('SELECT * FROM outQueue where rowid = 5')
-    for doc in cursor:
-        print(doc)
+    return (getOutQueueData())
 
     #End readOutQueue()
+
+def getOutQueueData(): # Same as messageIDQueue in MasterDatase
+    array = []
+    for row in cursor.execute('''SELECT * FROM outQueue where rowid = 1'''):
+        array.append(row)
+        return array
+    
+    #End getOutQueueData
+    
 
 def getProfileName(profileID):
 
@@ -206,5 +239,8 @@ def getProfileName(profileID):
 def main():
     
     print("Initializing Server Connection...")
-    server()
+    try:
+        server()
+    except KeyboardInterrupt:
+        closeSocketConnections(GLOBAL_CLIENT_SOCK, GLOBAL_SERVER_SOCK)
 main()

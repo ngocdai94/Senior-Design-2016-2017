@@ -121,15 +121,24 @@ def getFunctionName(messageID): # Helper Functions
 
 def readInQueue():
 
-    # Set this up for other commands rowid = other shit
-    cursor.execute('SELECT * FROM inQueue where rowid = 1')
-    for doc in cursor:
-        data = doc
-        if (True):
-            break
-    return data
+    array = []
+    for row in cursor.execute('''SELECT * FROM inQueue where rowid = 1'''):
+        array.append(row)
+        return array
 
     #End readInQueue()
+
+def getInQueueCommand(messageID):
+
+    if (messageID == 1):
+        cursor.execute('''SELECT * FROM inQueue where rowid = 1''')
+        for doc in cursor:
+            data = doc
+            if (True):
+                return data
+    else:
+        return -1
+        
 
 def getProfileName(profileID):
 
@@ -205,18 +214,21 @@ def main():
     createDataLog()
     createInOutQueue()
 
-    
     while True:
+        raw_input("Press Enter After BluetoothScript runs...")
         try:
             profileName = readInQueue()
             print(profileName)
-            writeToQueueOut(profileName,profileName,random.randint(25,300))
-        except:
-            IOError
-    #readOutQueue()
-    
-    cursor.close()
-    dataBase.close()
+            print(type(profileName))
+            print(profileName[0])
+            #print("profileName: " + profileName + " Type: ")
+            #print(type(profileName))
+            raw_input("Press Enter, yo...")
+            writeToQueueOut(profileName[0],profileName[1],1313133)
+
+        except KeyboardInterrupt:
+            cursor.close()
+            dataBase.close()
 
 main()
 

@@ -36,7 +36,7 @@ doorMacAddr = '0013a20040e5368f'
 doorSensorID = 1
 
 # MAC Address for Senors
-doorMacAddr = '0013a20040e5368f' 
+doorMacAddr = '0013a20040e5368f'
 
 # Sensor Type Globals
 doorSensorType = "Door_Sensor"
@@ -59,10 +59,14 @@ def insertDoorData(data):
     severity = 0
     if (data == True):
         severity = 1
+        dataEntry = 1
+    else:
+        dataEntry = 0
 
-    enterDataLogEntry(doorSensorID, doorSensorType, data, timeOfLog, severity)
-    dataBase.commit()
+    enterDataLogEntry(doorSensorID, doorSensorType,
+                      dataEntry, timeOfLog, severity)
 
+    
     #end insertDoor()
 
 def getDoorSensorData():
@@ -71,10 +75,13 @@ def getDoorSensorData():
 
     response = getXbeeResponse()
     addr = response['source_addr_long'].encode('hex')
-
+ 
     if (addr == doorMacAddr):
         data = response['samples']
-        return data
+        readings = []
+        for item in data:
+            readings.append(item.get('dio-0'))
+            return (int(readings[0]))
 
     #end getDoorSensorData()
         
@@ -91,10 +98,19 @@ def main():
 
     print("Gathering Data")
     while True:
-        #insertDoorData(getDoorSensorData())
-        time.sleep(.5)
-        data = str(getXbeeResponse()['samples'])
-        insertDoorData(data)
+        try:
+            data = getDoorSensorData()
+            insertDoorData(data)
+            time.sleep(.5)
+        except KeyboardInterrupt:
+            cursor.close()
+            dataBase.close()
+##        data = getXbeeResponse()['samples']
+##        readings = []
+##        for item in data:
+##            readings.append(item.get('dio-0'))
+##        #print(readings[0])
+##        insertDoorData(int(readings[0]))
         
     cursor.close()
     dataBase.close()
