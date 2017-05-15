@@ -8,34 +8,38 @@ import random
 
 chunks = []
 
-def parseString(inputMessage):
-    endOfMessage = False
+def parseString(inputData):
+    endOfInputData = False
     #count = 0
-    while (not endOfMessage):
-        if (len(inputMessage) > 0):
-            endOfMessage = False
-        else:
-           endOfMessage = True
+    while (not endOfInputData):
         chunk = ''
-        chunk = inputMessage
+        chunk = inputData
         index = chunk.find('~')
         if index == -1: # Not found
             chunks.append(chunk)
-            inputMessage = ""
+            inputData = ""
         else: # reached the end of a message
             if index > 0:
                 chunks.append(chunk[0:index])
             message = ''.join(chunks)
             del chunks[:]
-            inputMessage = chunk[index+1:] # get string from ~ to end of string
-            print "inputMessage = " + inputMessage + '\n'
+            inputData = chunk[index+1:] # get string from ~ to end of string
             print "message = " + message + "\n"
+            print "inputData = " + inputData + '\n'
+            print "Chunks:" + ''.join(chunks)
+        if (len(inputData) > 0):
+            endOfInputData = False
+        else:
+           endOfInputData = True
         #count += 1
 # end of parseString
 
 
 def main():
-    message = '{"foo":"bar"}~{"foo2":"bar2"}~'
+    message = '{"foo":"ba'
     parseString(message)
+    message = 'r"}~{"foo2":"bar2"}'
+    parseString(message)
+    parseString('~')
 
 main()

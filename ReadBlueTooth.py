@@ -4,6 +4,7 @@ import sqlite3 #SQL Databases
 import socket #Bluetooth Sockets
 import string #Need Strings
 import datetime
+import json
 
 # Globals
 uuid = "fa87c0d0-afac-11de-8a39-0800200c9a66"
@@ -18,7 +19,7 @@ GLOBAL_SERVER_SOCK = None
 
 # Parsing Globals
 chunks = []
-inputMessage = ''
+#inputMessage = ''
 
 #Database globals
 dataBase = sqlite3.connect('PaccarConnect.db')
@@ -33,51 +34,47 @@ electronics = 4
 furniture = 5
 misc = 6
 
-def parseString(inputMessage):
+def parseString(inputData):
 
-    # To do handle instance with mulitiple ~ in chunk buffer
-    # Investigate JSON library
-    print "parseString called"
     global chunks
-    endOfMessage = False
-    message = ''
+    
+    endOfInputData = False
     #count = 0
-    while (not endOfMessage):
-        if (len(inputMessage) > 0):
-            endOfMessage = False
-        else:
-           endOfMessage = True
+    while (not endOfInputData):
         chunk = ''
-        chunk = inputMessage
+        chunk = inputData
         index = chunk.find('~')
         if index == -1: # Not found
             chunks.append(chunk)
-            inputMessage = ""
-            #print(chunks)
+            inputData = ""
         else: # reached the end of a message
             if index > 0:
                 chunks.append(chunk[0:index])
             message = ''.join(chunks)
             del chunks[:]
-            inputMessage = chunk[index+1:] # get string from ~ to end of string
-##            print "inputMessage = " + inputMessage + '\n'
-##            print "message = " + message + "\n"
-
+            inputData = chunk[index+1:] # get string from ~ to end of string
+            print "message = " + message + "\n"
+            print "inputData = " + inputData + '\n'
+            print "Chunks:" + ''.join(chunks)
+        if (len(inputData) > 0):
+            endOfInputData = False
+        else:
+           endOfInputData = True
+        #count += 1
     return message
                 
     # end of parseString
 
 def getClientData(client_sock):
 
-    global inputMessage
     data = client_sock.recv(2048)
-    inputMessage = inputMessage + data
     return data
 
     #end getClientData
 
 def sendClientData(client_sock,dataOut):
 
+    print(dataOut)
     client_sock.send(dataOut)
 
     #End sendClientData
@@ -99,7 +96,7 @@ def server():
     global cursor
     global date
     global chunks
-    global inputMessage
+   # global inputMessage
     
     server_sock=BluetoothSocket(RFCOMM) #Initialize Server Object
     server_sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
@@ -127,39 +124,62 @@ def server():
     GLOBAL_CLIENT_SOCK = client_sock
     print("Accepted connection from ", client_info)
     server_sock.setblocking(0) #non-blocking server call
-
+    client_sock.setblocking(0)
+    
     count = 0
     data = "VOID"
     dataOut = "Garbage"
     isConnected = True
+    setBTConnection(isConnected)
+    junkData = '{"name":"John", "age":30,"cars":[ "Ford", "BMW", "Fiat" ]}'
+    writeToQueueIn(666, junkData)
     
-    while isConnected:
+    while (isConnected and verifyBTConnection()):
         if len(data) == 0:
             print ("data == 0")
             break
         if not data: # if the connection is lost close the socket
+            print ("not data")
             isConnected = False
+            setBTConnection(isConnected)
+            client_sock.close()
+            
         try:
+            print("waiting for data")
             data = parseString(getClientData(client_sock))
-            print ("ReadBluetooth.Server:Line138 data = : "+ data)
-            writeToQueueIn(int(data))
-            count = 1
+            print ("ReadBluetooth.Server():Line148 data = " + data)
+            messageId = getMessageId(data) #
+            writeToQueueIn(messageId,data)
         except IOError:
-            isConnected = False
+            #if e.args[0] == errno.EWOULDBLOCK: 
+                print 'EWOULDBLOCK'
+                time.sleep(1)           # short delay, no tight loops
+##        else:
+##            print 'e'
+            
 
         try:
-            dataOut = getOutQueueData()
-            if (dataOut):
-                print("ReadBlueTooth says: " + dataOut)
+            print('Checking output queue')
+            if verifyOutQueueContent():
+                dataOut = ''.join(str(e) for e in getOutQueueData())
+                print("Output Queue Item: " + dataOut)
+                #raw_input("Before Update outQueueTable")
                 sendClientData(client_sock,dataOut)
+                updateOutQueueTableProcess()
+                print("Sent!")
+                #raw_input("After Update outQueueTable")
         except IOError:
             print("getOutQueueData Failed or sendClietDataFailed")
+
 
     closeSocketConnections(client_sock,server_sock)
 
 #end server
 
 def getFunctionName(messageID): # Helper Functions
+
+    if (messageID == 666):
+        return 'INITIALIZED BLUETOOTH CONNECTION'
 
     if ((messageID < 0) or (messageID > 10)):
         return 'Invalid_Message_Id'
@@ -188,12 +208,15 @@ def getFunctionName(messageID): # Helper Functions
     #End getFunctionName()
 
 
-def writeToQueueIn(messageID):
-
+def writeToQueueIn(messageId, jsonData):
+    
+    jobProcessed = False
+    if (messageId == 666):
+        jobProcessed = True
     timeOfLog = str(datetime.datetime.now().time())[0:8]
     cursor.execute('''INSERT INTO inQueue
-        (messageID, functionName, messageArrivalTime) VALUES (?,?,?)''',
-        (messageID, getFunctionName(messageID), str(timeOfLog)))
+        (messageID, jsonData, messageArrivalTime, jobProcessed) VALUES (?,?,?,?)''',
+        (messageId, jsonData, str(timeOfLog), int(jobProcessed)))
     dataBase.commit()
 
     #End writeToQueueOut
@@ -205,10 +228,13 @@ def readOutQueue():
     #End readOutQueue()
 
 def getOutQueueData(): # Same as messageIDQueue in MasterDatase
-    array = []
-    for row in cursor.execute('''SELECT * FROM outQueue where rowid = 1'''):
-        array.append(row)
-        return array
+
+    print("readOutQueue() called..")
+    outQueueMessage = []
+    for row in cursor.execute('''SELECT * FROM outQueue WHERE jobProcessed = 0 LIMIT 1'''):
+        outQueueMessage.append(row)
+
+    return outQueueMessage
     
     #End getOutQueueData
     
@@ -235,12 +261,89 @@ def getProfileName(profileID):
 
     #End getProfileID
 
+def setBTConnection(setConnection):
 
+    print("setConnection() Called")
+    if setConnection:
+        cursor.execute('UPDATE btIsConnected SET isConnected = 1 LIMIT 1')
+        dataBase.commit()
+        return True
+    else:
+        cursor.execute('UPDATE btIsConnected SET isConnected = 0 LIMIT 1')
+        dataBase.commit()
+        return False
+    
+    #End setBTConnection
+
+def verifyBTConnection():
+
+    for isConnected in cursor.execute('SELECT * FROM btIsConnected LIMIT 1'):
+        True
+
+    return(bool(isConnected[0]))
+
+    #End verifyBTConnection
+
+def verifyOutQueueContent():
+
+    
+    jobToProcessExists = False
+    for jobProcessed in cursor.execute('SELECT * FROM outQueue WHERE jobProcessed = 0 LIMIT 1'):
+        jobToProcessExists = True
+        break
+
+    return jobToProcessExists
+
+def updateOutQueueTableProcess():
+
+    #cursor.execute('DELETE FROM outQueue Limit 1')
+    cursor.execute('UPDATE outQueue SET jobProcessed = 1 WHERE jobProcessed = 0 Limit 1')
+    dataBase.commit()
+    #removeFromOutQueueTable()
+
+def createJsonPackage():
+    
+    cursor.execute('''SELECT messageType FROM bluetoothOutgoing WHERE handledFlag = ?''',(False,))
+    bluetoothMessageType = cursor.fetchone()
+    if bluetoothMessageType[0] == messageType.sensorData:
+        cursor.execute('''SELECT * FROM dataBuffer''')
+        bluetoothSensorData = cursor.fetchall()
+        for sensor in bluetoothSensorData:
+            data = {}
+            data["sensorType"] = sensor[2]
+            data["value"] = sensor[3]
+            data2 = {sensor[1]: data}
+            data3 = {"sensorData" : data2}
+            message = json.dumps(data3)
+##            print(data3)
+            client_sock.send(message + '~')
+##            time.sleep(3)
+
+def getMessageId(data): #Passing in a string
+
+##  data =  '{"name":"John", "age":30,"cars":[ "Ford", "BMW", "Fiat" ]}'
+    
+    asciiData = bytearray(data).decode('ascii')
+    jsonMessage = json.loads(asciiData)
+    print("jsonMessage: " + str(jsonMessage))
+    messageId = jsonMessage["messageId"]
+    print("messageId: " + str(messageId))
+    return messageId
+
+    #End getMessageId()
+
+
+    
+    
 def main():
     
     print("Initializing Server Connection...")
+
+    verifyBTConnection()
+    
     try:
         server()
     except KeyboardInterrupt:
         closeSocketConnections(GLOBAL_CLIENT_SOCK, GLOBAL_SERVER_SOCK)
+        setBTConnection(False)
 main()
