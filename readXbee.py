@@ -21,7 +21,7 @@ HUMID = 'Humidity'
 DOORSTAT = 'Door Status'
 
 #Mac Addresses
-macTempHumid = '0013a20040e53397'
+macTempHumid = '0013a20040e53693'
 macDoor = '0013a20040e5368f'
 
 #End Globals
@@ -86,23 +86,23 @@ def main():
             #get MAC address from each Xbee
             addr = response['source_addr_long'].encode('hex')
 
-            #receive message
-            if response['rf_data']:
-                readings = response['rf_data'].split()
-                print(readings[0])
+##            #receive message
+##            if response['rf_data']:
+##                readings = response['rf_data'].split()
+##                print(readings[0])
                 
             #door sensor
             if addr == '0013a20040e5368f': # MAC Address Xbee Door
                 doorStatus = getdoor(response['samples'])
                 print(doorStatus) #Dai added
-                insertDoor(doorStatus,date,getCurrentTime())
+                #insertDoor(doorStatus,date,getCurrentTime())
 
             #analog sensor
-            elif addr == '0013a20040e898ae':
-
-                analog = getXbee(response['samples'])
-                print (analog) #Dai added
-                insertTemp(analog,date,getCurrentTime())
+            else:# addr ==  macTempHumid: #'0013a20040e898ae':
+                print(getXbee(response['samples']))
+                #analog = getXbee(response['samples'])
+                #print (analog) #Dai added
+                #insertTemp(analog,date,getCurrentTime())
                 #print(addr + ': analog : ' + str(analog))
             
         except KeyboardInterrupt:

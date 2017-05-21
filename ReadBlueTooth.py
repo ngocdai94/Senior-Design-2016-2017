@@ -7,7 +7,8 @@ import datetime
 import json
 
 # Globals
-uuid = "fa87c0d0-afac-11de-8a39-0800200c9a66"
+#uuid = "fa87c0d0-afac-11de-8a39-0800200c9a66" # For general Android Device
+uuid = "00001101-0000-1000-8000-00805f9b34fb" # For Delphi Display
 # addr = "30:5A:3A:8E:99:4E" #nexus tablet
 addr = "34:8A:7B:FE:7C:85" #Samsung Tablet
 connected = False
@@ -164,7 +165,8 @@ def server():
                 dataOut = ''.join(str(e) for e in getOutQueueData())
                 print("Output Queue Item: " + dataOut)
                 #raw_input("Before Update outQueueTable")
-                sendClientData(client_sock,dataOut)
+                client_sock.send(dataOut)
+                #sendClientData(client_sock,dataOut)
                 updateOutQueueTableProcess()
                 print("Sent!")
                 #raw_input("After Update outQueueTable")

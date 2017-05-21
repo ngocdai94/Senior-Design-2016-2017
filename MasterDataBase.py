@@ -4,6 +4,7 @@ import serial
 import string
 import random
 import datetime
+
 from string import maketrans
 
 # Database Globals
@@ -49,7 +50,70 @@ def createDataLog():
     dataBase.commit()
     
     #End createDataLog()
-    
+
+def createNotificationList():
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS notificationList(
+        id INTEGER PRIMARY KEY,
+        uid INTEGER,
+        type TEXT,
+        value REAL,
+        times REAL)''')
+    dataBase.commit()
+
+    #End createNotificationList()
+
+def createConfigList():
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS configList(
+        id INTEGER PRIMARY KEY,
+        profileID INTEGER,
+        sensorID INTEGER,
+        sensorType TEXT,
+        lowerThreshold REAL,
+        upperThreshold REAL,
+        severity TEXT,
+        state INTEGER,
+        interval REAL)''')
+    dataBase.commit()
+
+    #End createConfigList()
+
+##compares processed data to threhold values to determine errors
+def severityCheck(sensorProcessed, sensorType, sensorID, activeProfile):
+
+    if sensorType == "BINARY":
+        cursor.execute('''SELECT state FROM configList WHERE profileID = ? AND sensorID = ?''',(activeProfile[0], sensorID))
+        state = cursor.fetchone()
+        if sensorProcessed == state[0]:
+            return False
+        else:
+            print("error detected")
+            return True
+    else:
+        cursor.execute('''SELECT upperThreshold FROM configList WHERE profileID = ? AND sensorID = ?''',(activeProfile[0], sensorID))
+        tU = cursor.fetchone()
+        cursor.execute('''SELECT lowerThreshold FROM configList WHERE profileID = ? AND sensorID = ?''',(activeProfile[0], sensorID))
+        tL = cursor.fetchone()
+        if sensorProcessed > tU[0] or sensorProcessed < tL[0]:
+            print("error detected")
+            return False
+        else:
+            return True
+
+        #End severityCheck()
+
+def configListDefaults(profileID, sensorID, sensorType, lowerThresh, upperThresh):
+
+    cursor.execute('''
+        INSERT INTO configList(profileID, sensorID, sensorType, lowerThreshold, upperThreshold, severity, state, interval)
+        VALUES(?,?,?,?,?,?,?,?)''', (profileID, sensorID, sensorType, lowerThresh, upperThresh, 'LOW', 0, 10))
+    dataBase.commit()
+
+    #End configlistDefaults()
+
 
 def addSensorToList(sensorID, sensorType):
 
@@ -83,6 +147,18 @@ def createInOutQueue():
 
     #End createInOutQueue()
 
+def createDataBuffer():
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS dataBuffer(
+        id INTEGER PRIMARY KEY,
+        sensorID INTEGER,
+        sensorType TEXT,
+        value REAL,
+        times REAL)''')
+    db.commit()
+
+    #End createDataBuffer()
 
 
 def writeToQueueOut(profileID,sensorNum,data):
@@ -232,6 +308,8 @@ def parseProfileName(profileName):
 
     return array
 
+    #End parseProfileName()
+
 def dropAllTables():
 
     cursor.execute('drop table if exists inQueue')
@@ -290,6 +368,48 @@ def updateInQueueTableProcess():
 
     #End setBTConnection
 
+##This function takes the sensorData in chunks of any size and returns processed data by avg
+def dataAveraging(sensorData, sensorType):
+    trues = 0
+    falses = 0
+    if len(sensorData) > 0:
+        if sensorType == "BINARY":
+            for elements in sensorData:
+                if elements == True:
+                    trues = trues + 1
+                else:
+                    falses = falses + 1
+                if trues > falses or trues == falses:
+                    return 1
+                else:
+                    return 0
+        else:        
+            return sum(sensorData)/len(sensorData)
+    else:
+        return 0
+
+    #End dataAveraging()
+
+##This method pulls data from the data buffer
+def dataBufferQuery(sensorID):
+
+    cursor.execute('''SELECT value FROM dataBuffer WHERE sensorID = ?''', (sensorID,))
+    sensorData = cursor.fetchall()
+    dataBase.commit()
+    data = [i[0] for i in sensorData]
+    return data
+
+    #end dataBufferQuery()
+
+def writeToDataBuffer(sensorID, sensorType, value):
+    
+    cursor.execute('''
+        INSERT INTO dataBuffer(sensorID, sensorType, value, times)
+        VALUES(?,?,?,?)''', (sensorID,sensorType, 35, time.time()))
+    dataBase.commit()
+
+    #End writeToDataBuffer()
+    
     
 
 def main():
@@ -300,7 +420,22 @@ def main():
     createDataLog()
     createInOutQueue()
     createCallbackTable()
+    createNotificationList()
+    createConfigList()
     verifyInQueueContent()
+
+
+    profileID = 999
+    sensorID = 888
+    sensorType = 777
+    lowerThresh = 444
+    upperThresh = 555
+
+    # Set defaults for configuration lists
+    configListDefaults(1, 1, 'BINARY', 0,1) #Door Sensor
+    configListDefaults(2,2,'Analog',22,27) #Temperature
+
+    
     writeToQueueOut(666,666,666)
     
     print("Waiting for Bluetooth Connection...")
@@ -333,19 +468,3 @@ def main():
             setBTConnection(False)
 
 main()
-
-    
-
-    
-    
-
-    
-
-
-    
-    
-
-    
-
-
-    
