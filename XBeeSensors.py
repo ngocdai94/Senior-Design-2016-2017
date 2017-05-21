@@ -35,8 +35,8 @@ humidTempID = 2
 
 # MAC Address for Senors
 doorMacAddr = '0013a20040e5368f'
-#macTempHumid = '0013a20040e53397'
-macTempHumid = '0013a20040e53693'
+macTempHumid = '0013a20040e53397'
+#macTempHumid = '0013a20040e53693'
 
 # Sensor Type Globals
 doorSensorType = "Door_Sensor"
@@ -83,7 +83,7 @@ def getDoorSensorData():
     global doorMacAddr
     response = getXbeeResponse()
     addr = response['source_addr_long'].encode('hex')
- 
+    print(addr)
     if (addr == doorMacAddr):
         data = response['samples']
         readings = []
@@ -109,6 +109,16 @@ def getTempHumid():
         print readings
 
     #end getTempHumid()
+
+def tempHumidTest():
+    #receive message
+
+    response = getXbeeResponse()
+    print("tempHumid() running")
+    print(response)
+    if response['rf_data']:
+        readings = response['rf_data'].split()
+        print(readings[0])
         
 
 def getXbeeResponse():
@@ -122,7 +132,7 @@ def main():
 
     print("Gathering Data")
     while True:
-        getTempHumid()
+        tempHumidTest()
         try:
             data = getDoorSensorData()
             insertDoorData(data)

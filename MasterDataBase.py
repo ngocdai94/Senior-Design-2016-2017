@@ -405,7 +405,7 @@ def writeToDataBuffer(sensorID, sensorType, value):
     
     cursor.execute('''
         INSERT INTO dataBuffer(sensorID, sensorType, value, times)
-        VALUES(?,?,?,?)''', (sensorID,sensorType, 35, time.time()))
+        VALUES(?,?,?,?)''', (sensorID,sensorType, value, time.time()))
     dataBase.commit()
 
     #End writeToDataBuffer()
