@@ -16,17 +16,17 @@ import random
 dataBase = sqlite3.connect('PaccarConnect.db')
 cursor = dataBase.cursor()
 
-SERIALPORT = "/dev/ttyUSB0"    # the com/serial port the XBee is connected to, the pi GPIO should always be ttyAMA0
-BAUDRATE = 9600            # Baudrate used to communicate over serial
-door = '\x00\x13\xa2\x00@\xe56\x8f'
-analog = '\x00\x13\xa2\x00@\xe8\x98\xae'
-date = time.strftime("%y/%m/%d")
-TEMP = 'Temperature'
-HUMID = 'Humidity'
-DOORSTAT = 'Door Status'
-
-ser = serial.Serial(SERIALPORT, BAUDRATE, timeout = 1)
-xBee = ZigBee(ser)
+##SERIALPORT = "/dev/ttyUSB0"    # the com/serial port the XBee is connected to, the pi GPIO should always be ttyAMA0
+##BAUDRATE = 9600            # Baudrate used to communicate over serial
+##door = '\x00\x13\xa2\x00@\xe56\x8f'
+##analog = '\x00\x13\xa2\x00@\xe8\x98\xae'
+##date = time.strftime("%y/%m/%d")
+##TEMP = 'Temperature'
+##HUMID = 'Humidity'
+##DOORSTAT = 'Door Status'
+##
+##ser = serial.Serial(SERIALPORT, BAUDRATE, timeout = 1)
+##xBee = ZigBee(ser)
 
 
 #Sensor ID Globals
@@ -65,17 +65,28 @@ def insertDoorData(data):
 
     enterDataLogEntry(doorSensorID, doorSensorType,
                       dataEntry, timeOfLog, severity)
+    writeToDataBuffer(doorSensorID, 'BINARY',data)
 
     
     #end insertDoor()
 
-def insertHumidTemp(Data):
+def insertHumidTemp(data):
 
     global humidTempID
-    addr = response['source_addr_long'].endcode('hex')
 
-    if (addr == macTempHumid):
-        data = response['samples']
+    lowThresh = 65
+    upThresh = 85
+    severity = 1
+    if (data < lowThresh or data > upThresh):
+        serverity = 10
+    
+    timeOfLog = str(datetime.datetime.now().time())[0:8]
+    enterDataLogEntry(humidTempID, 'Temperature',
+                      data, timeOfLog, severity)
+    writeToDataBuffer(humidTempID , 'NON-BINARY', data)
+
+    #end insertHumidTemp()
+    
 
 def getDoorSensorData():
     
@@ -100,7 +111,7 @@ def getTempHumid():
     response = getXbeeResponse()
     addr = response['source_addr_long'].encode('hex')
     print(addr) 
-    if (addr == '0013a20040e53693'):#macTempHumid):
+    if (addr == '0013a20040e53693'): #macTempHumid):
         data = response['samples']
         print(data)
         readings = []
@@ -114,7 +125,7 @@ def tempHumidTest():
     #receive message
 
     response = getXbeeResponse()
-    print("tempHumid() running")
+    print("tempHumid() running...")
     print(response)
     if response['rf_data']:
         readings = response['rf_data'].split()
@@ -128,20 +139,31 @@ def getXbeeResponse():
 
     #end getXbeeResponse()
 
+def writeToDataBuffer(sensorID, sensorType, value):
+
+    timeOfLog = str(datetime.datetime.now().time())[0:8]    
+    cursor.execute('''
+        INSERT INTO dataBuffer(sensorID, sensorType, value, times)
+        VALUES(?,?,?,?)''', (sensorID,sensorType, value, timeOfLog))
+    dataBase.commit()
+
+    #End writeToDataBuffer()
+
 def main():
 
     print("Gathering Data")
     while True:
-        tempHumidTest()
         try:
-            data = getDoorSensorData()
-            insertDoorData(data)
-            time.sleep(.5)
+            #response = getDoorSensorData()
+            insertDoorData(random.randint(0,1))
+            insertHumidTemp(random.randint(60,90))
+            time.sleep(1)
         except KeyboardInterrupt:
             cursor.close()
             dataBase.close()        
     cursor.close()
     dataBase.close()
+    print(str(datetime.datetime.now().time())[0:8])
 
     #end main()
 

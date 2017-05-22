@@ -4,6 +4,7 @@ import serial
 import string
 import random
 import datetime
+import json
 
 from string import maketrans
 
@@ -81,11 +82,41 @@ def createConfigList():
 
     #End createConfigList()
 
+def createProfileList():
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS profileList(
+        id INTEGER PRIMARY KEY,
+        profileID INTEGER,
+        profileName TEXT,
+        profileType TEXT,
+        active INTEGER)''')
+    dataBase.commit()
+
+    createProfile(1,'Perishables','Default',0)
+    createProfile(2,'Non-Perishables','Default',0)
+    createProfile(3,'Frozen','Default',0)
+    createProfile(4,'Electronics','Default',0)
+    createProfile(5,'Furniture','Default',0)
+    createProfile(6,'MISC','Default',0)
+
+    dataBase.commit()
+
+    #End createProfileList()
+
+def createProfile(profileID, profileName, profileType, active):
+    cursor.execute('''
+        INSERT INTO profileList(profileID, profileName, profileType, active)
+        VALUES(?,?,?,?)''', (profileID, profileName, profileType, active))
+    dataBase.commit()
+
+    #End createProfile()
+
 ##compares processed data to threhold values to determine errors
-def severityCheck(sensorProcessed, sensorType, sensorID, activeProfile):
+def severityCheck(sensorProcessed, sensorType, sensorID, profileID):
 
     if sensorType == "BINARY":
-        cursor.execute('''SELECT state FROM configList WHERE profileID = ? AND sensorID = ?''',(activeProfile[0], sensorID))
+        cursor.execute('''SELECT state FROM configList WHERE profileID = ? AND sensorID = ?''',(profileID, sensorID))
         state = cursor.fetchone()
         if sensorProcessed == state[0]:
             return False
@@ -93,9 +124,9 @@ def severityCheck(sensorProcessed, sensorType, sensorID, activeProfile):
             print("error detected")
             return True
     else:
-        cursor.execute('''SELECT upperThreshold FROM configList WHERE profileID = ? AND sensorID = ?''',(activeProfile[0], sensorID))
+        cursor.execute('''SELECT upperThreshold FROM configList WHERE profileID = ? AND sensorID = ?''',(profileID, sensorID))
         tU = cursor.fetchone()
-        cursor.execute('''SELECT lowerThreshold FROM configList WHERE profileID = ? AND sensorID = ?''',(activeProfile[0], sensorID))
+        cursor.execute('''SELECT lowerThreshold FROM configList WHERE profileID = ? AND sensorID = ?''',(profileID, sensorID))
         tL = cursor.fetchone()
         if sensorProcessed > tU[0] or sensorProcessed < tL[0]:
             print("error detected")
@@ -137,9 +168,9 @@ def createInOutQueue():
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS outQueue(
-        profileName TEXT,
-        sensorName TEXT,
-        data INTEGER,
+        messageID INTEGER,
+        jsonData TEXT,
+        messageSentTime INTEGER,
         jobProcessed INTEGER
         )''') 
 
@@ -156,23 +187,19 @@ def createDataBuffer():
         sensorType TEXT,
         value REAL,
         times REAL)''')
-    db.commit()
+    dataBase.commit()
 
     #End createDataBuffer()
 
 
-def writeToQueueOut(profileID,sensorNum,data):
+def writeToQueueOut(messageID,jsonData):
         
 
-    print("writeToOutQueue() profileID: " + str(profileID) +
-          " sensorNum: " + str(sensorNum))
-
     jobProcessed = False
-    if (profileID == 666):
-        jobProcessed = True
+    timeOfLog = str(datetime.datetime.now().time())[0:8]
     cursor.execute('''INSERT INTO outQueue
-        (profileName, sensorName, data, jobProcessed) VALUES (?,?,?,?)''',
-        (getProfileName(profileID), getSensorName(sensorNum), data,int(jobProcessed)))
+        (messageID, jsonData, messageSentTime, jobProcessed) VALUES (?,?,?,?)''',
+        (messageID, jsonData, timeOfLog, int(jobProcessed)))
     dataBase.commit()
 
     #End writeToQueueOut
@@ -266,15 +293,16 @@ def getSensorName(sensorID):
 
 ### These are testing functions not to be used in the full script  ###
 
-def writeToQueueIn(messageID):
-
+def writeToQueueIn(messageId, jsonData):
+    
+    jobProcessed = False
+    if (messageId == 666):
+        jobProcessed = True
     timeOfLog = str(datetime.datetime.now().time())[0:8]
     cursor.execute('''INSERT INTO inQueue
-        (messageID, functionName, messageArrivalTime) VALUES (?,?,?)''',
-        (messageID, getFunctionName(messageID), str(timeOfLog)))
+        (messageID, jsonData, messageArrivalTime, jobProcessed) VALUES (?,?,?,?)''',
+        (messageId, jsonData, str(timeOfLog), int(jobProcessed)))
     dataBase.commit()
-
-    #End writeToQueueOut
     
 def readOutQueue():
 
@@ -401,29 +429,79 @@ def dataBufferQuery(sensorID):
 
     #end dataBufferQuery()
 
-def writeToDataBuffer(sensorID, sensorType, value):
-    
-    cursor.execute('''
-        INSERT INTO dataBuffer(sensorID, sensorType, value, times)
-        VALUES(?,?,?,?)''', (sensorID,sensorType, value, time.time()))
+def profileTableQuery():
+
+    cursor.execute('''SELECT profileID FROM profileList WHERE active = 1''')
+    profileID = cursor.fetchone()
+    dataBase.commit()
+    print("ActiveProfile: " + str(profileID))
+
+    #End ProfileID
+
+def setProfileIsActive(profileID): # 1st param is ID to turnOff 2nd is param to turnOn
+
+    cursor.execute('UPDATE profileList SET active = 0 WHERE active = 1')
     dataBase.commit()
 
-    #End writeToDataBuffer()
+    cursor.execute('''UPDATE profileList SET active = 1 WHERE profileID = ?''',(profileID,))
+    dataBase.commit()
+
+    #End setBTConnection
     
+
+def processDataBufferTest(sensorID):
+
+    sensorType = getSensorType(sensorID)
+    sensorData = dataBufferQuery(sensorID)
+    profileID = sensorID # This needs to be more dynamic, yo!
+    sensorAverage = dataAveraging(sensorData, sensorType)
+    errors = severityCheck(sensorAverage, sensorType, sensorID,sensorID)
+
+def getSensorType(sensorID):
+
+    if (sensorID == 1):
+        return "Non-BINARY"
+    else:
+        return "BINARY"
+
+def getProfileList():
     
+    cursor.execute('''SELECT profileID, profileName, profileType, active FROM profileList''')
+    profiles = cursor.fetchall()
+    #profiles = ''.join(str(e) for e in profiles)
+    #profiles = parseProfileName(profiles)
+
+    dataNode = []
+    for profile in profiles:
+        dataRow = {}
+        dataRow['profileID'] = profile[0]
+        dataRow['profileName'] = profile[1]
+        dataRow['profileType'] = profile[2]
+        dataRow['active'] = profile[3]
+        dataNode.append(dataRow)
+
+    parentJsonNode = {"messageID: 2": dataNode}
+    message = json.dumps(parentJsonNode)                
+    return message
 
 def main():
 
     print('Setting up Database...')
 
-    dropAllTables()
-    createDataLog()
-    createInOutQueue()
-    createCallbackTable()
-    createNotificationList()
-    createConfigList()
-    verifyInQueueContent()
+    #dropAllTables()
+##    createDataLog()
+##    createInOutQueue()
+##    createCallbackTable()
+##    createNotificationList()
+##    createConfigList()
+##    createProfileList()
+##    verifyInQueueContent()
+##    createDataBuffer()
 
+    # Testing   
+    #setProfileIsActive(4)
+    #profileTableQuery()
+    #getProfileList()
 
     profileID = 999
     sensorID = 888
@@ -436,9 +514,12 @@ def main():
     configListDefaults(2,2,'Analog',22,27) #Temperature
 
     
-    writeToQueueOut(666,666,666)
+    #writeToQueueOut(666,666)
+    #writeToQueueIn(2, 666)
     
     print("Waiting for Bluetooth Connection...")
+
+    #setBTConnection(True)
 
     while not verifyBTConnection():
         True
@@ -454,17 +535,22 @@ def main():
             
         try:
             if (verifyInQueueContent()):
-                profileData = ''.join(str(e) for e in readInQueue())
+                message = ''.join(str(e) for e in readInQueue())
                 #raw_input("Before Update inQueueTable")
-                profileData = parseProfileName(profileData)
-                writeToQueueOut(int(profileData[0]),int(profileData[0]),profileData[2])
+                message = parseProfileName(message)
+                print(message)
+                print(message[0])
+                if (int(message[0]) == 2):
+                    jsonData = getProfileList()
+                    writeToQueueOut(2,jsonData)
                 updateInQueueTableProcess()
                 #raw_input("After Update inQueueTable")
-                print(profileData)
+                
 
         except KeyboardInterrupt:
             cursor.close()
             dataBase.close()
             setBTConnection(False)
+            print(str(datetime.datetime.now().time())[0:8])
 
 main()

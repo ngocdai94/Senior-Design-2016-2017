@@ -133,7 +133,7 @@ def server():
     isConnected = True
     setBTConnection(isConnected)
     junkData = '{"name":"John", "age":30,"cars":[ "Ford", "BMW", "Fiat" ]}'
-    writeToQueueIn(666, junkData)
+    #writeToQueueIn(666, junkData)
     
     while (isConnected and verifyBTConnection()):
         if len(data) == 0:
@@ -146,10 +146,10 @@ def server():
             client_sock.close()
             
         try:
-            print("waiting for data")
             data = parseString(getClientData(client_sock))
             print ("ReadBluetooth.Server():Line148 data = " + data)
-            messageId = getMessageId(data) #
+            messageId = getMessageId(data)
+            print(data)
             writeToQueueIn(messageId,data)
         except IOError:
             #if e.args[0] == errno.EWOULDBLOCK: 
@@ -160,12 +160,12 @@ def server():
             
 
         try:
-            print('Checking output queue')
+            
             if verifyOutQueueContent():
                 dataOut = ''.join(str(e) for e in getOutQueueData())
                 print("Output Queue Item: " + dataOut)
                 #raw_input("Before Update outQueueTable")
-                client_sock.send(dataOut)
+                client_sock.send(dataOut + '~')
                 #sendClientData(client_sock,dataOut)
                 updateOutQueueTableProcess()
                 print("Sent!")
@@ -348,4 +348,5 @@ def main():
     except KeyboardInterrupt:
         closeSocketConnections(GLOBAL_CLIENT_SOCK, GLOBAL_SERVER_SOCK)
         setBTConnection(False)
+        print(str(datetime.datetime.now().time())[0:8])
 main()
