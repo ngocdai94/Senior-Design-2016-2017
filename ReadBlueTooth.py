@@ -149,7 +149,6 @@ def server():
             data = parseString(getClientData(client_sock))
             print ("ReadBluetooth.Server():Line148 data = " + data)
             messageId = getMessageId(data)
-            print(data)
             writeToQueueIn(messageId,data)
         except IOError:
             #if e.args[0] == errno.EWOULDBLOCK: 
@@ -162,10 +161,11 @@ def server():
         try:
             
             if verifyOutQueueContent():
-                dataOut = ''.join(str(e) for e in getOutQueueData())
-                print("Output Queue Item: " + dataOut)
+                dataOut = getOutQueueData()
+                # unicode to string goes here...
+                print("Output Queue Item: " + str(dataOut[0]))
                 #raw_input("Before Update outQueueTable")
-                client_sock.send(dataOut + '~')
+                client_sock.send(dataOut[0] + '~')
                 #sendClientData(client_sock,dataOut)
                 updateOutQueueTableProcess()
                 print("Sent!")
@@ -223,18 +223,11 @@ def writeToQueueIn(messageId, jsonData):
 
     #End writeToQueueOut
 
-def readOutQueue():
-
-    return (getOutQueueData())
-
-    #End readOutQueue()
 
 def getOutQueueData(): # Same as messageIDQueue in MasterDatase
 
-    print("readOutQueue() called..")
-    outQueueMessage = []
-    for row in cursor.execute('''SELECT * FROM outQueue WHERE jobProcessed = 0 LIMIT 1'''):
-        outQueueMessage.append(row)
+    cursor.execute('''SELECT jsonData FROM outQueue WHERE jobProcessed = 0''')
+    outQueueMessage = cursor.fetchone()
 
     return outQueueMessage
     
@@ -328,8 +321,8 @@ def getMessageId(data): #Passing in a string
     asciiData = bytearray(data).decode('ascii')
     jsonMessage = json.loads(asciiData)
     print("jsonMessage: " + str(jsonMessage))
-    messageId = jsonMessage["messageId"]
-    print("messageId: " + str(messageId))
+    messageId = jsonMessage[0] #thingsssss
+    messageId = messageId['messageID'] 
     return messageId
 
     #End getMessageId()

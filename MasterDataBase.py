@@ -235,12 +235,9 @@ def getFunctionName(messageID): # Helper Functions
 def readInQueue():
 
     print ("readInQueue() called...")
-    inQueueMessage = []
     #for row in cursor.execute('''SELECT * FROM inQueue where rowid = 1'''):
-    for row in cursor.execute('''SELECT * FROM inQueue WHERE jobProcessed = 0 LIMIT 1'''):
-        inQueueMessage.append(row)
-        break
-
+    cursor.execute('''SELECT messageID, jsonData FROM inQueue WHERE jobProcessed = 0 LIMIT 1''')
+    inQueueMessage = cursor.fetchone()
     return inQueueMessage
 
     #End readInQueue()
@@ -484,6 +481,68 @@ def getProfileList():
     message = json.dumps(parentJsonNode)                
     return message
 
+def getSensorList():
+
+    cursor.execute('''SELECT sensorName, sensorID, sensorType FROM sensorList''')
+    sensors = cursor.fetchall()
+
+    dataNode = []
+    for sensor in sensors:
+        dataRow = {}
+        dataRow['sensorName'] = sensor[0]
+        dataRow['sensorID'] = sensor[1]
+        dataRow['sensorType'] = sensor[2]
+        dataNode.append(dataRow)
+
+    parentJsonNode = {"messageID: 3": dataNode}
+    message = json.dumps(parentJsonNode)
+    return message
+
+    #End getSensorList()
+
+def getSensorData(sensorID):
+
+    cursor.execute('''SELECT (sensorType,
+        sensorID,
+        data,
+        upperThresh,
+        lowerThresh,
+        sensorID,
+        severity) VALUES (?,)
+        Inner join Data_Log on configList.sensorID = Data_Log.sensorID''',
+                   (sensorID)
+                   )
+    sensor = cursur.fetchone()
+
+    dataNode = []
+    dataRow = {}
+    dataRow['sensorType'] = sensor[0]
+    dataRow['sensorID'] = sensor[1]
+    dataRow['data'] = sensor[2]
+    dataRow['upperThresh'] = sensor[3]
+    dataRow['lowerThresh'] = sensor[4]
+    dataRow['sensorID'] = sensor[5]
+    dataRow['severity'] = sensor[6]
+    dataNode.append(dataRow)
+
+    parentJsonNode = {"messageID: 1": dataNode}
+    message = json.dumps(parentJsonNode)
+    return message
+    
+    
+
+def getNotificationCount():
+
+    cursor.execute('''SELECT uid FROM notificationList''')
+    count = 0
+    notifications = cursor.fetchall()
+    for notification in notifications:
+        count += 1
+
+    return count
+
+
+
 def main():
 
     print('Setting up Database...')
@@ -535,12 +594,10 @@ def main():
             
         try:
             if (verifyInQueueContent()):
-                message = ''.join(str(e) for e in readInQueue())
-                #raw_input("Before Update inQueueTable")
-                message = parseProfileName(message)
+                #message = ''.join(str(e) for e in readInQueue())
+                message = readInQueue()
                 print(message)
-                print(message[0])
-                if (int(message[0]) == 2):
+                if (message[0] == 2):
                     jsonData = getProfileList()
                     writeToQueueOut(2,jsonData)
                 updateInQueueTableProcess()
@@ -551,6 +608,5 @@ def main():
             cursor.close()
             dataBase.close()
             setBTConnection(False)
-            print(str(datetime.datetime.now().time())[0:8])
 
 main()
