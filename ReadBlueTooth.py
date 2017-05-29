@@ -54,9 +54,9 @@ def parseString(inputData):
             message = ''.join(chunks)
             del chunks[:]
             inputData = chunk[index+1:] # get string from ~ to end of string
-            print "message = " + message + "\n"
-            print "inputData = " + inputData + '\n'
-            print "Chunks:" + ''.join(chunks)
+            #print "message = " + message + "\n"
+            #print "inputData = " + inputData + '\n'
+            #print "Chunks:" + ''.join(chunks)
         if (len(inputData) > 0):
             endOfInputData = False
         else:
@@ -91,6 +91,7 @@ def closeSocketConnections(client_sock,server_sock):
 
 
 def server():
+    
     global connected
     global masterPort
     global dataBase
@@ -132,8 +133,6 @@ def server():
     dataOut = "Garbage"
     isConnected = True
     setBTConnection(isConnected)
-    junkData = '{"name":"John", "age":30,"cars":[ "Ford", "BMW", "Fiat" ]}'
-    #writeToQueueIn(666, junkData)
     
     while (isConnected and verifyBTConnection()):
         if len(data) == 0:
@@ -147,13 +146,12 @@ def server():
             
         try:
             data = parseString(getClientData(client_sock))
-            print ("ReadBluetooth.Server():Line148 data = " + data)
+            #print ("ReadBluetooth.Server():Line148 data = " + data)
             messageId = getMessageId(data)
             writeToQueueIn(messageId,data)
         except IOError:
             #if e.args[0] == errno.EWOULDBLOCK: 
-                print 'EWOULDBLOCK'
-                time.sleep(1)           # short delay, no tight loops
+                time.sleep(.5)           # short delay, no tight loops
 ##        else:
 ##            print 'e'
             
@@ -162,14 +160,10 @@ def server():
             
             if verifyOutQueueContent():
                 dataOut = getOutQueueData()
-                # unicode to string goes here...
-                print("Output Queue Item: " + str(dataOut[0]))
-                #raw_input("Before Update outQueueTable")
+                #print("Output Queue Item: " + str(dataOut[0]))
                 client_sock.send(dataOut[0] + '~')
-                #sendClientData(client_sock,dataOut)
                 updateOutQueueTableProcess()
                 print("Sent!")
-                #raw_input("After Update outQueueTable")
         except IOError:
             print("getOutQueueData Failed or sendClietDataFailed")
 
@@ -315,12 +309,12 @@ def createJsonPackage():
 ##            time.sleep(3)
 
 def getMessageId(data): #Passing in a string
-
-##  data =  '{"name":"John", "age":30,"cars":[ "Ford", "BMW", "Fiat" ]}'
     
     asciiData = bytearray(data).decode('ascii')
     jsonMessage = json.loads(asciiData)
-    print("jsonMessage: " + str(jsonMessage))
+    
+    print("jsonMessage: " + str(jsonMessage[0]) + " time: " +
+          str(datetime.datetime.now().time())[0:8])
     messageId = jsonMessage[0] #thingsssss
     messageId = messageId['messageID'] 
     return messageId

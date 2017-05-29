@@ -56,14 +56,29 @@ def createNotificationList():
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS notificationList(
-        id INTEGER PRIMARY KEY,
-        uid INTEGER,
-        type TEXT,
-        value REAL,
-        times REAL)''')
+        uid INTEGER PRIMARY KEY,
+        sensorName TEXT,
+        data INT,
+        severity INT,
+        timeOfNotification TEXT)''')
     dataBase.commit()
 
     #End createNotificationList()
+
+def writeToNotificationList(sensorName,data,severity):
+
+    timeOfLog = str(datetime.datetime.now().time())[0:8]
+    acknowledged = 0
+    cursor.execute('''
+        INSERT INTO notificationList(
+        sensorName,
+        data,
+        severity,
+        timeOfNotification,
+        acknowledged) VALUES (?,?,?,?,?)''',
+        (sensorName, data, severity, timeOfLog, acknowledged))
+
+    dataBase.commit()
 
 def createConfigList():
 
@@ -136,11 +151,11 @@ def severityCheck(sensorProcessed, sensorType, sensorID, profileID):
 
         #End severityCheck()
 
-def configListDefaults(profileID, sensorID, sensorType, lowerThresh, upperThresh):
+def configListDefaults(profileID, sensorID, sensorType, lowerThresh, upperThresh, severity):
 
     cursor.execute('''
         INSERT INTO configList(profileID, sensorID, sensorType, lowerThreshold, upperThreshold, severity, state, interval)
-        VALUES(?,?,?,?,?,?,?,?)''', (profileID, sensorID, sensorType, lowerThresh, upperThresh, 'LOW', 0, 10))
+        VALUES(?,?,?,?,?,?,?,?)''', (profileID, sensorID, sensorType, lowerThresh, upperThresh, severity, 0, 10))
     dataBase.commit()
 
     #End configlistDefaults()
@@ -309,11 +324,11 @@ def readOutQueue():
 
     #End readInQueue()
 
-def enterDataLogEntry(sensorID, sensorType, data, timeOfLog, date, severity):
+def enterDataLogEntry(sensorID, sensorType, data, timeOfLog, severity):
 
     cursor.execute('''INSERT INTO Data_Log
         (sensorID, sensorType, data, timeOfLog, severity)
-        VALUES (?,?,?,?,?,?)''',
+        VALUES (?,?,?,?,?)''',
         (sensorID, sensorType, data, timeOfLog, severity))
     dataBase.commit()
 
@@ -356,8 +371,8 @@ def createCallbackTable():
 
 def verifyBTConnection():
 
-    for isConnected in cursor.execute('SELECT * FROM btIsConnected LIMIT 1'):
-        True
+    cursor.execute('SELECT isConnected FROM btIsConnected')
+    isConnected = cursor.fetchone()
         
     return(bool(isConnected[0]))
 
@@ -483,6 +498,7 @@ def getProfileList():
 
 def getSensorList():
 
+    print("getSensorlist() called...")
     cursor.execute('''SELECT sensorName, sensorID, sensorType FROM sensorList''')
     sensors = cursor.fetchall()
 
@@ -500,48 +516,150 @@ def getSensorList():
 
     #End getSensorList()
 
-def getSensorData(sensorID):
+    #Testing profileID
 
-    cursor.execute('''SELECT (sensorType,
-        sensorID,
-        data,
-        upperThresh,
-        lowerThresh,
-        sensorID,
-        severity) VALUES (?,)
-        Inner join Data_Log on configList.sensorID = Data_Log.sensorID''',
-                   (sensorID)
+def getSensorData(profileID):
+
+    cursor.execute('''SELECT dl.sensorID, dl.sensorType, dl.data, dl.timeOfLog, cl.severity
+                FROM Data_Log dl
+                INNER JOIN configList cl on cl.sensorID = dl.sensorID
+                VALUES (?)
+                WHERE cl.profileID = ?''',
+                   (profileID)
                    )
-    sensor = cursur.fetchone()
+    sensor = cursor.fetchone()
 
     dataNode = []
     dataRow = {}
-    dataRow['sensorType'] = sensor[0]
-    dataRow['sensorID'] = sensor[1]
-    dataRow['data'] = sensor[2]
-    dataRow['upperThresh'] = sensor[3]
-    dataRow['lowerThresh'] = sensor[4]
-    dataRow['sensorID'] = sensor[5]
-    dataRow['severity'] = sensor[6]
+    dataRow['sensorID'] = str(sensor[0])
+    dataRow['sensorType'] = str(sensor[1])
+    dataRow['data'] = int(sensor[2])
+    dataRow['timeOfLog'] = int(sensor[3])
+    dataRow['severity'] = int(sensor[4])
+    dataRow['isWithinThresh'] = True
     dataNode.append(dataRow)
 
     parentJsonNode = {"messageID: 1": dataNode}
     message = json.dumps(parentJsonNode)
     return message
+
+def getAllSensorData():
+
+    cursor.execute('''SELECT
+        sensorID,
+        data,
+        severity
+        FROM Data_Log Order By ID DESC Limit 2'''
+                   )
+    sensors = cursor.fetchall()
+    dataNode = []
+    
+    for sensor in sensors:
+        dataRow = {}
+        dataRow['sensorID'] = str(sensor[0])
+        dataRow['data'] = str(sensor[1])
+        dataRow['severity'] = str(sensor[2])
+        dataNode.append(dataRow)
+
+    parentJsonNode = {"messageID: 1": dataNode}
+    message = json.dumps(parentJsonNode)
+    return message
+
+    ##Select ID, sensorID, data, timeOfLog
+    ##from Data_Log
+    ##Group By sensorID
+    ##Where sensorID = (Select sensorID From Data_Log where)
     
     
 
 def getNotificationCount():
 
-    cursor.execute('''SELECT uid FROM notificationList''')
-    count = 0
+    cursor.execute('''SELECT severity FROM notificationList
+        WHERE acknowledged = 0''')
     notifications = cursor.fetchall()
+    
+    low = 0
+    medium = 0
+    high = 0
+    
     for notification in notifications:
-        count += 1
 
-    return count
+        severity = int(notification[0])
+
+        if severity == 1:
+            low += 1
+        if severity == 2:
+            medium += 1
+        if severity == 3:
+            high += 1
+    
+
+    dataNode = []
+    dataRow = {}
+    dataRow['low'] = low
+    dataRow['medium'] = medium
+    dataRow['high'] = high
+    dataNode.append(dataRow)
+
+    parentJsonNode = {"messageID: 4": dataNode}
+    message = json.dumps(parentJsonNode)
+    return message
+
+def getNotifications():
+
+    cursor.execute('''SELECT sensorName, data, severity, timeOfNotification
+        FROM notificationList WHERE acknowledged = 0''')
+
+    notifications = cursor.fetchall()
+    dataNode = []
+    
+    for notification in notifications:
+        dataRow = {}
+        dataRow['sensorName'] = notification[0]
+        dataRow['data'] = notification[1]
+        dataRow['severity'] = notification[2]
+        dataRow['time'] = notification[3]
+        dataNode.append(dataRow)
+
+    parentJsonNode = {"messageID: 5": dataNode}
+    message = json.dumps(parentJsonNode)
+    return message
+    
+
+def acknowledgeNotifications():
+
+    cursor.execute('''UPDATE notificationList SET acknowledged = 1
+        WHERE acknowledged = 0''')
+    dataBase.commit()
+    
+
+def processMessageID(message):
+
+    if (message[0] == 1):
+        jsonData = getAllSensorData()
+        writeToQueueOut(1,jsonData)
+        
+    if (message[0] == 2):
+        jsonData = getProfileList()
+        writeToQueueOut(2,jsonData)
+        
+    if (message[0] == 3):
+        jsonData = getSensorList()
+        writeToQueueOut(3,jsonData)
+        
+    if (message[0] == 4):
+        jsonData = getNotificationCount()
+        writeToQueueOut(4,jsonData)
+
+    if (message[0] == 5):
+        jsonData = getNotifications()
+        writeToQueueOut(5,jsonData)
+        acknowledgeNotifications()
 
 
+    updateInQueueTableProcess() #Implement a primary key so updates work properly
+
+    #End processMessageID()
 
 def main():
 
@@ -569,10 +687,22 @@ def main():
     upperThresh = 555
 
     # Set defaults for configuration lists
-    configListDefaults(1, 1, 'BINARY', 0,1) #Door Sensor
-    configListDefaults(2,2,'Analog',22,27) #Temperature
+    configListDefaults(1, 1, 'BINARY', 0,1, 'HIGH') #Door Sensor
+    configListDefaults(2,2,'Analog',22,27, 'LOW') #Temperature
 
-    
+    # Fake data
+    timeOfLog = str(datetime.datetime.now().time())[0:8]
+    enterDataLogEntry(1, 'Door Sensor', 1, timeOfLog, 3)
+    timeOfLog = str(datetime.datetime.now().time())[0:8]
+    enterDataLogEntry(2, 'Temperature Sensor', 13, timeOfLog, 2)
+
+    # Fake Notifications
+    writeToNotificationList('Door Sensor',0,1)
+    writeToNotificationList('Door Sensor',1,3)
+    writeToNotificationList('Temperature Sensor',75,1)
+    writeToNotificationList('Temperature Sensor',85,2)
+    writeToNotificationList('Temperature Sensor',85,3)
+        
     #writeToQueueOut(666,666)
     #writeToQueueIn(2, 666)
     
@@ -596,11 +726,8 @@ def main():
             if (verifyInQueueContent()):
                 #message = ''.join(str(e) for e in readInQueue())
                 message = readInQueue()
-                print(message)
-                if (message[0] == 2):
-                    jsonData = getProfileList()
-                    writeToQueueOut(2,jsonData)
-                updateInQueueTableProcess()
+                print("Line 599 - message: "+ str(message))
+                processMessageID(message)
                 #raw_input("After Update inQueueTable")
                 
 
