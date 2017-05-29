@@ -612,12 +612,13 @@ def getNotifications():
 
     notifications = cursor.fetchall()
     dataNode = []
+    severityArray = ['low','medium','high']
     
     for notification in notifications:
         dataRow = {}
         dataRow['sensorName'] = notification[0]
         dataRow['data'] = notification[1]
-        dataRow['severity'] = notification[2]
+        dataRow['severity'] = str(severityArray[int(notification[2]) -1]) #Clean this up
         dataRow['time'] = notification[3]
         dataNode.append(dataRow)
 

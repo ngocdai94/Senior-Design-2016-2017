@@ -321,8 +321,6 @@ def getMessageId(data): #Passing in a string
 
     #End getMessageId()
 
-
-    
     
 def main():
     
